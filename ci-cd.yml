@@ -1,55 +1,52 @@
-name: ci/cd pipeline
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - dev
-    pull_request:
-      - dev
+    branches: [dev]
+  pull_request:
+    branches: [dev]
 
 env:
   APP_NAME: spring-app
   PROD_SERVER: ${{ secrets.PROD_SERVER }}
-
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout code
-      - uses: actions/checkout@V4
+      - name: Checkout code
+        uses: actions/checkout@v4  
 
-      - name: set up jdk
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'maven'
+          cache: 'maven'  
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3  
+        with:
+          path: ~/.m2  
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
 
-      - name: cache mave dependancies
-        uses: actions/cache@v4
-        with: ~/.m2
-        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-m2
-      
-
-      - name: build with maven
+      - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      - name: copy files via SSH
-        uses: appleboy/scp_action@V0.1.7
+      - name: Copy files via SSH
+        uses: appleboy/scp-action@v0.1.7  
         with:
           host: ${{ env.PROD_SERVER }}
           username: deploy-user
           key: ${{ secrets.SSH_KEY }}
           source: "target/*.jar,docker-compose.yml,Dockerfile"
           target: /opt/path
-          strip_components:0
+          strip_components: 0  
 
-      - name: deploy to server
-        uses: appleboy/ssh.action@v1.2.0
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.0  
         with:
           host: ${{ env.PROD_SERVER }}
           username: deploy-user
@@ -59,7 +56,5 @@ jobs:
             docker-compose down || true
             docker-compose pull
             docker-compose up --build -d
-            docker image prune
+            docker image prune -f  # Ajout de -f pour forcer
             docker ps
-
-
