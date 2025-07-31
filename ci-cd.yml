@@ -1,0 +1,65 @@
+name: ci/cd pipeline
+
+on:
+  push:
+    branches:
+      - dev
+    pull_request:
+      - dev
+
+env:
+  APP_NAME: spring-app
+  PROD_SERVER: ${{ secrets.PROD_SERVER }}
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout code
+      - uses: actions/checkout@V4
+
+      - name: set up jdk
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+
+      - name: cache mave dependancies
+        uses: actions/cache@v4
+        with: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+      
+
+      - name: build with maven
+        run: mvn clean package -DskipTests
+
+      - name: copy files via SSH
+        uses: appleboy/scp_action@V0.1.7
+        with:
+          host: ${{ env.PROD_SERVER }}
+          username: deploy-user
+          key: ${{ secrets.SSH_KEY }}
+          source: "target/*.jar,docker-compose.yml,Dockerfile"
+          target: /opt/path
+          strip_components:0
+
+      - name: deploy to server
+        uses: appleboy/ssh.action@v1.2.0
+        with:
+          host: ${{ env.PROD_SERVER }}
+          username: deploy-user
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /opt/path
+            docker-compose down || true
+            docker-compose pull
+            docker-compose up --build -d
+            docker image prune
+            docker ps
+
+
